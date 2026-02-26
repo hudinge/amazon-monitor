@@ -1,0 +1,28 @@
+name: Amazon ASIN Monitor
+
+on:
+  schedule:
+    # 这里的 cron 表达式代表每小时的 0 分运行一次
+    - cron: '0 * * * *'
+  workflow_dispatch: # 允许你手动点击按钮测试运行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 设置 Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 安装依赖
+        run: pip install requests
+
+      - name: 执行监控脚本
+        env:
+          RAINFOREST_API_KEY: ${{ secrets.RAINFOREST_API_KEY }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+        run: python monitor.py
