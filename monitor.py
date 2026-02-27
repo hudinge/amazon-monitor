@@ -22,14 +22,18 @@ def get_amazon_data():
     try:
         res = requests.get('https://api.rainforestapi.com/request', params=params, timeout=20)
         data = res.json()
-        if not data.get("request_info", {}).get("success"): 
-            print(f"API Error: {data.get('request_info', {}).get('message')}")
-            return None
+        if not data.get("request_info", {}).get("success"): return None
         
         product = data.get("product", {})
-        bsr_list = product.get("bestsellers_rank", [])
         
-        # 提取排名信息
+        # 优化评论数提取逻辑
+        # 尝试从不同的 API 字段中获取评论数
+        reviews_count = product.get("reviews_total") 
+        if reviews_count is None:
+            # 备选方案：从汇总评分详情中计算
+            reviews_count = product.get("sub_rating_counts", {}).get("total_reviews", 0)
+
+        bsr_list = product.get("bestsellers_rank", [])
         main_rank = "N/A"
         sub_rank = "N/A"
         if bsr_list:
@@ -40,12 +44,12 @@ def get_amazon_data():
         return {
             "rating": product.get("rating", 0),
             "ratings_total": product.get("ratings_total", 0),
-            "reviews_total": product.get("reviews_total", 0), # 带文字评论数
+            "reviews_total": reviews_count, # 使用优化后的变量
             "bsr_main": main_rank,
             "bsr_sub": sub_rank
         }
     except Exception as e:
-        print(f"Request Error: {e}")
+        print(f"Error: {e}")
         return None
 
 def send_email(new_data):
