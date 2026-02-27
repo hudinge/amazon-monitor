@@ -22,36 +22,60 @@ def get_amazon_data():
     try:
         res = requests.get('https://api.rainforestapi.com/request', params=params, timeout=20)
         data = res.json()
-        if not data.get("request_info", {}).get("success"): return None
+        if not data.get("request_info", {}).get("success"): 
+            print(f"API Error: {data.get('request_info', {}).get('message')}")
+            return None
         
         product = data.get("product", {})
+        bsr_list = product.get("bestsellers_rank", [])
+        
+        # 提取排名信息
+        main_rank = "N/A"
+        sub_rank = "N/A"
+        if bsr_list:
+            main_rank = f"#{bsr_list[0].get('rank')} in {bsr_list[0].get('category')}"
+            if len(bsr_list) > 1:
+                sub_rank = f"#{bsr_list[1].get('rank')} in {bsr_list[1].get('category')}"
+
         return {
             "rating": product.get("rating", 0),
             "ratings_total": product.get("ratings_total", 0),
-            "bsr_rank": product.get("bestsellers_rank", [{}])[0].get("rank", "N/A"),
-            "price": product.get("buybox_winner", {}).get("price", {}).get("value", 0)
+            "reviews_total": product.get("reviews_total", 0), # 带文字评论数
+            "bsr_main": main_rank,
+            "bsr_sub": sub_rank
         }
-    except: return None
+    except Exception as e:
+        print(f"Request Error: {e}")
+        return None
 
 def send_email(new_data):
-    subject = f"【监控报告】ASIN {ASIN} 状态更新"
-    body = f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n" \
-           f"⭐ 评分: {new_data['rating']}\n" \
-           f"📈 评论总数: {new_data['ratings_total']}\n" \
-           f"🏆 BSR排名: {new_data['bsr_rank']}\n" \
-           f"💰 价格: ${new_data['price']}"
+    subject = f"【监控报告】ASIN {ASIN} 数据更新"
+    body = f"核查时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n" \
+           f"--------------------------\n" \
+           f"⭐ 评分星级: {new_data['rating']}\n" \
+           f"📊 Rating总数: {new_data['ratings_total']}\n" \
+           f"💬 Review数量 (带文字): {new_data['reviews_total']}\n" \
+           f"🏆 大类排名: {new_data['bsr_main']}\n" \
+           f"🎖️ 小类排名: {new_data['bsr_sub']}\n" \
+           f"--------------------------\n" \
+           f"商品链接: https://www.amazon.com/dp/{ASIN}"
 
     msg = MIMEText(body, "plain", "utf-8")
-    msg["From"] = f"{Header('亚马逊助手', 'utf-8').encode()} <{SENDER_EMAIL}>"
+    msg["From"] = SENDER_EMAIL
     msg["To"] = RECEIVER_EMAIL
     msg["Subject"] = Header(subject, "utf-8")
 
-    with smtplib.SMTP_SSL("smtp.qq.com", 465) as server:
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+    try:
+        with smtplib.SMTP_SSL("smtp.qq.com", 465) as server:
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+        print("✅ 邮件发送成功")
+    except Exception as e:
+        print(f"❌ 邮件发送失败: {e}")
 
 if __name__ == "__main__":
     data = get_amazon_data()
     if data:
         send_email(data)
-        print("✅ 数据抓取并邮件发送成功")
+    else:
+        print("❌ 未能获取到有效数据")
